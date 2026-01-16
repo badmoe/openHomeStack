@@ -6,6 +6,7 @@
 let allServices = [];
 let currentCategory = 'all';
 let currentServiceForInstall = null;
+let currentServiceForLogs = null;
 
 // Icon mapping for services
 const serviceIcons = {
@@ -31,7 +32,6 @@ async function init() {
             const category = btn.dataset.category;
             switchCategory(category);
 
-            // Update active state
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         });
@@ -82,7 +82,6 @@ async function loadSystemInfo() {
         const response = await API.getSystemInfo();
         const system = response.system;
 
-        // Update system stats
         document.getElementById('cpuUsage').textContent =
             system.cpu?.percent ? `${system.cpu.percent}%` : '--';
 
@@ -93,7 +92,7 @@ async function loadSystemInfo() {
             system.disk?.percent ? `${system.disk.percent}%` : '--';
 
         document.getElementById('containerCount').textContent =
-            system.docker?.containers_running ? `${system.docker.containers_running} running` : '--';
+            system.docker?.containers_running !== undefined ? `${system.docker.containers_running} running` : '--';
 
     } catch (error) {
         console.error('Failed to load system info:', error);
@@ -101,10 +100,10 @@ async function loadSystemInfo() {
 }
 
 /**
- * Render services in the grid
+ * Render services in the table
  */
 function renderServices() {
-    const grid = document.getElementById('servicesGrid');
+    const tbody = document.getElementById('servicesBody');
 
     // Filter services by category
     const filteredServices = currentCategory === 'all'
@@ -112,42 +111,59 @@ function renderServices() {
         : allServices.filter(s => s.category === currentCategory);
 
     if (filteredServices.length === 0) {
-        grid.innerHTML = `
-            <div class="loading">
-                <i class="fas fa-inbox"></i>
-                <p>No services found in this category</p>
-            </div>
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="empty-cell">
+                    <i class="fas fa-inbox"></i> No services found in this category
+                </td>
+            </tr>
         `;
         return;
     }
 
-    // Render service cards
-    grid.innerHTML = filteredServices.map(service => createServiceCard(service)).join('');
+    // Sort: running first, then by name
+    filteredServices.sort((a, b) => {
+        const aRunning = a.status?.state === 'running' ? 0 : 1;
+        const bRunning = b.status?.state === 'running' ? 0 : 1;
+        if (aRunning !== bRunning) return aRunning - bRunning;
+        return (a.name || '').localeCompare(b.name || '');
+    });
+
+    tbody.innerHTML = filteredServices.map(service => createServiceRow(service)).join('');
 }
 
 /**
- * Create HTML for a service card
+ * Create HTML for a service table row
  */
-function createServiceCard(service) {
+function createServiceRow(service) {
     const icon = serviceIcons[service.icon] || 'fa-box';
     const status = service.status?.state || 'not_installed';
     const statusClass = getStatusClass(status);
     const statusText = formatStatus(status);
 
     return `
-        <div class="service-card" data-service-id="${service.id}">
-            <div class="service-header">
-                <i class="service-icon fas ${icon}"></i>
-                <div class="service-info">
-                    <h3>${service.name}</h3>
-                    <span class="service-status ${statusClass}">${statusText}</span>
+        <tr data-service-id="${service.id}">
+            <td>
+                <div class="service-name">
+                    <i class="service-icon fas ${icon}"></i>
+                    <span>${service.name || service.id}</span>
                 </div>
-            </div>
-            <p class="service-description">${service.description}</p>
-            <div class="service-actions">
-                ${getServiceActions(service, status)}
-            </div>
-        </div>
+            </td>
+            <td>
+                <span class="status-badge ${statusClass}">${statusText}</span>
+            </td>
+            <td>
+                <span class="category-badge">${service.category || 'other'}</span>
+            </td>
+            <td>
+                <span class="description-text">${service.description || ''}</span>
+            </td>
+            <td>
+                <div class="action-buttons">
+                    ${getServiceActions(service, status)}
+                </div>
+            </td>
+        </tr>
     `;
 }
 
@@ -165,14 +181,14 @@ function getServiceActions(service, status) {
         if (service.url) {
             actions.push(`<button class="btn btn-success" onclick="openService('${service.url}')">Open</button>`);
         }
-        actions.push(`<button class="btn btn-warning btn-small" onclick="stopService('${service.id}')">Stop</button>`);
-        actions.push(`<button class="btn btn-secondary btn-small" onclick="showLogs('${service.id}')">Logs</button>`);
-    } else if (status === 'exited' || status === 'stopped') {
+        actions.push(`<button class="btn btn-warning" onclick="stopService('${service.id}')">Stop</button>`);
+        actions.push(`<button class="btn btn-secondary" onclick="showLogs('${service.id}')">Logs</button>`);
+    } else if (status === 'exited' || status === 'stopped' || status === 'restarting') {
         actions.push(`<button class="btn btn-success" onclick="startService('${service.id}')">Start</button>`);
-        actions.push(`<button class="btn btn-secondary btn-small" onclick="showLogs('${service.id}')">Logs</button>`);
+        actions.push(`<button class="btn btn-secondary" onclick="showLogs('${service.id}')">Logs</button>`);
     }
 
-    actions.push(`<button class="btn btn-danger btn-small" onclick="removeService('${service.id}')">Remove</button>`);
+    actions.push(`<button class="btn btn-danger" onclick="removeService('${service.id}')">Remove</button>`);
 
     return actions.join('');
 }
@@ -186,6 +202,7 @@ function getStatusClass(status) {
         'exited': 'status-stopped',
         'stopped': 'status-stopped',
         'not_installed': 'status-not-installed',
+        'restarting': 'status-restarting',
         'error': 'status-error'
     };
     return statusMap[status] || 'status-not-installed';
@@ -200,6 +217,7 @@ function formatStatus(status) {
         'exited': 'Stopped',
         'stopped': 'Stopped',
         'not_installed': 'Not Installed',
+        'restarting': 'Restarting',
         'error': 'Error'
     };
     return statusMap[status] || 'Unknown';
@@ -224,12 +242,11 @@ async function showInstallModal(serviceId) {
 
         document.getElementById('modalTitle').textContent = `Install ${service.name}`;
 
-        // Generate form for installation prompts
         const prompts = service.install_prompts || [];
 
         if (prompts.length === 0) {
             document.getElementById('modalBody').innerHTML = `
-                <p>Ready to install ${service.name}?</p>
+                <p>Ready to install <strong>${service.name}</strong>?</p>
                 <p class="form-help">This service requires no additional configuration.</p>
             `;
         } else {
@@ -274,7 +291,6 @@ async function confirmInstall() {
     installBtn.textContent = 'Installing...';
 
     try {
-        // Collect form values
         const envVars = {};
         const inputs = document.querySelectorAll('#modalBody input');
         inputs.forEach(input => {
@@ -303,7 +319,7 @@ async function confirmInstall() {
 async function startService(serviceId) {
     try {
         await API.startService(serviceId);
-        showSuccess('Service started successfully');
+        showSuccess('Service started');
         await loadServices();
     } catch (error) {
         showError(`Failed to start service: ${error.message}`);
@@ -316,7 +332,7 @@ async function startService(serviceId) {
 async function stopService(serviceId) {
     try {
         await API.stopService(serviceId);
-        showSuccess('Service stopped successfully');
+        showSuccess('Service stopped');
         await loadServices();
     } catch (error) {
         showError(`Failed to stop service: ${error.message}`);
@@ -327,13 +343,13 @@ async function stopService(serviceId) {
  * Remove a service
  */
 async function removeService(serviceId) {
-    if (!confirm('Are you sure you want to remove this service? This will stop and remove the container(s).')) {
+    if (!confirm('Remove this service? This will stop and remove the container(s).')) {
         return;
     }
 
     try {
         await API.removeService(serviceId, false);
-        showSuccess('Service removed successfully');
+        showSuccess('Service removed');
         await loadServices();
     } catch (error) {
         showError(`Failed to remove service: ${error.message}`);
@@ -346,7 +362,6 @@ async function removeService(serviceId) {
 async function showLogs(serviceId) {
     currentServiceForLogs = serviceId;
 
-    // Find service name
     const service = allServices.find(s => s.id === serviceId);
     document.getElementById('logsTitle').textContent = `${service?.name || serviceId} - Logs`;
 
@@ -389,7 +404,6 @@ function openService(url) {
  * Show error message
  */
 function showError(message) {
-    // Simple alert for now - could be improved with toast notifications
     alert(`Error: ${message}`);
 }
 
@@ -397,7 +411,6 @@ function showError(message) {
  * Show success message
  */
 function showSuccess(message) {
-    // Simple alert for now - could be improved with toast notifications
     alert(message);
 }
 

@@ -13,7 +13,6 @@
         <header>
             <div class="header-content">
                 <h1><i class="fas fa-layer-group"></i> openHomeStack</h1>
-                <p class="subtitle">Your Self-Hosted Home Server Dashboard</p>
             </div>
             <div class="system-info" id="systemInfo">
                 <div class="stat">
@@ -35,22 +34,37 @@
             </div>
         </header>
 
-        <!-- Category Tabs -->
-        <div class="category-tabs">
-            <button class="tab-btn active" data-category="all">All Services</button>
-            <button class="tab-btn" data-category="media">Media</button>
-            <button class="tab-btn" data-category="networking">Networking</button>
-            <button class="tab-btn" data-category="automation">Automation</button>
-            <button class="tab-btn" data-category="management">Management</button>
+        <!-- Category Filter -->
+        <div class="filter-bar">
+            <div class="category-tabs">
+                <button class="tab-btn active" data-category="all">All</button>
+                <button class="tab-btn" data-category="media">Media</button>
+                <button class="tab-btn" data-category="networking">Networking</button>
+                <button class="tab-btn" data-category="automation">Automation</button>
+                <button class="tab-btn" data-category="management">Management</button>
+            </div>
         </div>
 
-        <!-- Services Grid -->
-        <div class="services-grid" id="servicesGrid">
-            <!-- Services will be dynamically loaded here -->
-            <div class="loading">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>Loading services...</p>
-            </div>
+        <!-- Services Table -->
+        <div class="table-container">
+            <table class="services-table" id="servicesTable">
+                <thead>
+                    <tr>
+                        <th class="col-service">Service</th>
+                        <th class="col-status">Status</th>
+                        <th class="col-category">Category</th>
+                        <th class="col-description">Description</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="servicesBody">
+                    <tr>
+                        <td colspan="5" class="loading-cell">
+                            <i class="fas fa-spinner fa-spin"></i> Loading services...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- Install Modal -->
@@ -61,7 +75,6 @@
                     <span class="close" onclick="closeInstallModal()">&times;</span>
                 </div>
                 <div class="modal-body" id="modalBody">
-                    <!-- Install form will be dynamically generated -->
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeInstallModal()">Cancel</button>

@@ -30,5 +30,5 @@ services:
       - "openhomestack.category=networking"
       - "openhomestack.url=http://localhost/admin"
       # Installation prompts for web dashboard
-      - "openhomestack.install.prompt.password=Web Admin Password"
+      - "openhomestack.install.prompt.pihole_password=Web Admin Password"
       - "openhomestack.install.prompt.server_ip=Server IP Address (e.g., 192.168.1.100)"

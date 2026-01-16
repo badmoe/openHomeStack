@@ -9,8 +9,10 @@ services:
     ports:
       - "9090:9090"
     volumes:
+      # Data storage (persistent)
       - /home/containers/monitoring/prometheus:/prometheus
-      - /home/containers/monitoring/prometheus-config:/etc/prometheus
+      # Config from repo (includes default prometheus.yml)
+      - ./config:/etc/prometheus:ro
     restart: unless-stopped
     labels:
       # Metadata for openHomeStack dashboard (on first service for discovery)

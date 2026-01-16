@@ -1,26 +1,21 @@
 services:
-  wireguard:
-    image: linuxserver/wireguard:latest
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:13
     container_name: gaming-vpn
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Chicago
-      - SERVERURL=${SERVER_URL:-auto}
-      - SERVERPORT=51820
-      - PEERS=${VPN_PEERS:-5}
-      - PEERDNS=auto
-      - INTERNAL_SUBNET=10.13.13.0
-      - ALLOWEDIPS=10.13.13.0/24
+      - WG_HOST=${SERVER_URL:-auto}
+      - PASSWORD=${VPN_PASSWORD:-admin}
+      - WG_PORT=51820
+      - WG_DEFAULT_DNS=1.1.1.1
+      - WG_ALLOWED_IPS=0.0.0.0/0
     volumes:
-      - /home/containers/gaming-vpn/config:/config
-      # /lib/modules required for WireGuard on Linux
-      - /lib/modules:/lib/modules
+      - /home/containers/gaming-vpn/config:/etc/wireguard
     ports:
       - "51820:51820/udp"
+      - "51821:51821/tcp"
     sysctls:
       - net.ipv4.conf.all.src_valid_mark=1
     restart: unless-stopped
@@ -28,10 +23,10 @@ services:
       # Metadata for openHomeStack dashboard
       - "openhomestack.service=gaming-vpn"
       - "openhomestack.name=Gaming VPN"
-      - "openhomestack.description=WireGuard VPN for secure multiplayer gaming"
+      - "openhomestack.description=WireGuard VPN with web management UI"
       - "openhomestack.icon=gamepad"
       - "openhomestack.category=networking"
-      - "openhomestack.url="
+      - "openhomestack.url=http://localhost:51821"
       # Installation prompts for web dashboard
-      - "openhomestack.install.prompt.server_url=Server URL or Public IP (for auto-detection, leave blank)"
-      - "openhomestack.install.prompt.vpn_peers=Number of Peer Configurations to Generate (default: 5)"
+      - "openhomestack.install.prompt.server_url=Server URL or Public IP"
+      - "openhomestack.install.prompt.vpn_password=Web UI Password"

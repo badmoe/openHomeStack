@@ -2,7 +2,8 @@ services:
   homeassistant:
     image: ghcr.io/home-assistant/home-assistant:stable
     container_name: homeassistant
-    network_mode: host
+    ports:
+      - "8123:8123/tcp"
     environment:
       - PUID=1000
       - PGID=1000
@@ -10,10 +11,10 @@ services:
     volumes:
       - /home/containers/homeassistant/config:/config
     restart: unless-stopped
-    privileged: true
-    devices:
-      # USB devices for Zigbee/Z-Wave (optional - comment out if not using)
-      - /dev/ttyUSB0:/dev/ttyUSB0
+    # Uncomment privileged and devices if using USB Zigbee/Z-Wave adapters
+    # privileged: true
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
     labels:
       # Metadata for openHomeStack dashboard
       - "openhomestack.service=homeassistant"

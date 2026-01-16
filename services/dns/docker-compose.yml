@@ -1,19 +1,24 @@
 services:
-  coredns:
-    image: coredns/coredns:latest
-    container_name: coredns
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardhome
     ports:
+      # DNS ports (using 5354 to avoid conflict with Pi-hole on 53)
       - "5354:53/tcp"
       - "5354:53/udp"
+      # Web UI
+      - "3001:3000/tcp"
+      # Initial setup UI (only needed first run, same port as web UI after setup)
+      - "8082:80/tcp"
     volumes:
-      - /home/containers/dns/config:/etc/coredns
-    command: -conf /etc/coredns/Corefile
+      - /home/containers/dns/work:/opt/adguardhome/work
+      - /home/containers/dns/conf:/opt/adguardhome/conf
     restart: unless-stopped
     labels:
       # Metadata for openHomeStack dashboard
       - "openhomestack.service=dns"
-      - "openhomestack.name=DNS Server"
-      - "openhomestack.description=Local DNS for custom domain names"
+      - "openhomestack.name=AdGuard Home"
+      - "openhomestack.description=DNS server with optional ad-blocking and web management"
       - "openhomestack.icon=globe"
       - "openhomestack.category=networking"
-      - "openhomestack.url="
+      - "openhomestack.url=http://localhost:3001"

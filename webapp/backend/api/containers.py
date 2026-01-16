@@ -438,8 +438,18 @@ class ContainerManager:
                 (base_path / 'config').mkdir(parents=True, exist_ok=True)
 
             # Set ownership to PUID:PGID (1000:1000) - only on Linux
+            # Use docker to fix permissions since backend may run in container without host privileges
             if platform.system() != 'Windows':
-                os.system(f"chown -R 1000:1000 {base_path}")
+                try:
+                    subprocess.run(
+                        ['docker', 'run', '--rm', '-v', f'{base_path}:/data', 'alpine',
+                         'chown', '-R', '1000:1000', '/data'],
+                        capture_output=True,
+                        timeout=30
+                    )
+                    logger.info(f"Set ownership to 1000:1000 for {base_path}")
+                except Exception as e:
+                    logger.warning(f"Could not set ownership for {base_path}: {e}")
 
         except Exception as e:
             logger.error(f"Error creating data directories for {service_id}: {e}")
