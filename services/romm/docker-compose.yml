@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  romm:
+    image: rommapp/romm:latest
+    container_name: romm
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+      # Database configuration
+      - DB_HOST=localhost
+      - DB_PORT=3306
+      - DB_USER=romm
+      - DB_NAME=romm
+      - DB_PASSWD=${ROMM_DB_PASSWORD:-romm}
+      # Optional: IGDB API credentials for enhanced metadata
+      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID:-}
+      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:-}
+    volumes:
+      # ROMM application data and database
+      - /home/containers/romm/data:/romm/library
+      - /home/containers/romm/config:/romm/config
+      # ROM files - organized by platform
+      - /home/containers/romm/roms:/romm/roms
+      # Assets (covers, screenshots, etc.)
+      - /home/containers/romm/assets:/romm/assets
+    restart: unless-stopped
+    depends_on:
+      - romm-db
+    labels:
+      # Metadata for openHomeStack dashboard
+      - "openhomestack.service=romm"
+      - "openhomestack.name=ROMM"
+      - "openhomestack.description=Retro game ROM library manager"
+      - "openhomestack.icon=gamepad"
+      - "openhomestack.category=media"
+      - "openhomestack.url=http://localhost:8080"
+      # Installation prompts for web dashboard
+      - "openhomestack.install.prompt.db_password=Database Password (default: romm)"
+      - "openhomestack.install.prompt.igdb_client_id=IGDB Client ID (optional - for game metadata)"
+      - "openhomestack.install.prompt.igdb_client_secret=IGDB Client Secret (optional)"
+
+  romm-db:
+    image: mariadb:latest
+    container_name: romm-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=${ROMM_DB_PASSWORD:-romm}
+      - MYSQL_DATABASE=romm
+      - MYSQL_USER=romm
+      - MYSQL_PASSWORD=${ROMM_DB_PASSWORD:-romm}
+    volumes:
+      - /home/containers/romm/database:/var/lib/mysql
+    restart: unless-stopped
+    network_mode: host
