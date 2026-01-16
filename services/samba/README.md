@@ -4,7 +4,7 @@ Network file sharing for easy access to your container data from any device.
 
 ## Overview
 
-Samba provides SMB/CIFS file sharing, making your container data accessible from Windows, Mac, and Linux devices. This is the easiest way to manage media files for Plex, ROMs for ROMM, and other container data without needing SSH or command-line access.
+Samba provides SMB/CIFS file sharing, making your container data accessible from Windows, Mac, and Linux devices. This is the easiest way to manage media files for Plex and other container data without needing SSH or command-line access.
 
 ## Default Configuration
 
@@ -57,10 +57,6 @@ The `containers` share exposes all service data:
 │       ├── movies\
 │       ├── tv\
 │       └── music\
-├── romm\
-│   ├── roms\
-│   ├── config\
-│   └── database\
 ├── pihole\
 │   ├── etc-pihole\
 │   └── etc-dnsmasq.d\
@@ -74,13 +70,6 @@ The `containers` share exposes all service data:
 2. Navigate to `plex\media\movies` (or tv, music)
 3. Copy your media files here
 4. Plex will auto-scan and add them to your library
-
-**Adding ROMs to ROMM:**
-1. Connect to share
-2. Navigate to `romm\roms`
-3. Create platform folders (nes, snes, etc.)
-4. Copy ROM files to appropriate folders
-5. Scan library in ROMM
 
 **Backing Up Container Data:**
 - Simply copy folders from the share to your PC
@@ -111,7 +100,7 @@ The `containers` share exposes all service data:
 **Files not appearing in services:**
 - Check file permissions: should be readable by PUID=1000
 - Verify files are in correct directories
-- Trigger manual scan in service (Plex, ROMM, etc.)
+- Trigger manual scan in service (e.g., Plex)
 
 ## Security Considerations
 

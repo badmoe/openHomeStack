@@ -36,9 +36,8 @@ The bootable ISO automates Proxmox installation and initial configuration. Ansib
 
 openHomeStack provides pre-configured Docker Compose definitions for the following services:
 
-### Media  
-**Plex Media Server** - Stream your personal media library to any device  
-**ROMM** - Retro game ROM library manager for organizing classic game collections
+### Media
+**Plex Media Server** - Stream your personal media library to any device
 
 ### Networking & Security  
 **DNS Server** - Local DNS for friendly naming and custom resolution  
