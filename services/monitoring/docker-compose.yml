@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - /home/containers/monitoring/prometheus:/prometheus
+      - /home/containers/monitoring/prometheus-config:/etc/prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - /home/containers/monitoring/grafana:/var/lib/grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    labels:
+      # Metadata for openHomeStack dashboard
+      - "openhomestack.service=monitoring"
+      - "openhomestack.name=System Monitor"
+      - "openhomestack.description=Grafana + Prometheus for system and container monitoring"
+      - "openhomestack.icon=chart"
+      - "openhomestack.category=management"
+      - "openhomestack.url=http://localhost:3000"
+      # Installation prompts for web dashboard
+      - "openhomestack.install.prompt.grafana_password=Grafana Admin Password (default: admin)"
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    command:
+      - '--path.rootfs=/host'
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
