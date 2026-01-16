@@ -55,6 +55,18 @@ async function loadServices() {
     try {
         const response = await API.getServices();
         allServices = response.services || [];
+
+        // Fetch status for each service
+        await Promise.all(allServices.map(async (service) => {
+            try {
+                const statusResponse = await API.getServiceStatus(service.id);
+                service.status = statusResponse.status;
+            } catch (error) {
+                console.error(`Failed to load status for ${service.id}:`, error);
+                service.status = { state: 'unknown' };
+            }
+        }));
+
         renderServices();
     } catch (error) {
         console.error('Failed to load services:', error);

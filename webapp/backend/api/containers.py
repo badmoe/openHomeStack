@@ -19,12 +19,19 @@ class ContainerManager:
     def __init__(self):
         """Initialize container manager"""
         self.service_manager = ServiceManager()
-        try:
-            self.docker_client = docker.from_env()
-            logger.info("Docker client initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize Docker client: {e}")
-            self.docker_client = None
+        self._docker_client = None
+
+    @property
+    def docker_client(self):
+        """Lazy initialization of Docker client"""
+        if self._docker_client is None:
+            try:
+                self._docker_client = docker.from_env()
+                logger.info("Docker client initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize Docker client: {e}")
+                self._docker_client = None
+        return self._docker_client
 
     def install(self, service_id, env_vars=None):
         """
@@ -194,43 +201,59 @@ class ContainerManager:
     def get_status(self, service_id):
         """
         Get current status of service containers
+        Uses docker CLI commands for better Windows compatibility
 
         Returns:
             dict: Container status information
         """
-        if not self.docker_client:
-            return {"state": "unknown", "error": "Docker client not available"}
-
         try:
-            # Find containers for this service
-            containers = self.docker_client.containers.list(
-                all=True,
-                filters={"label": f"openhomestack.service={service_id}"}
+            # Try to get status using docker ps command
+            result = subprocess.run(
+                ['docker', 'ps', '-a', '--filter', f'name=^{service_id}$', '--format', '{{.Names}}\t{{.Status}}\t{{.Image}}\t{{.ID}}'],
+                capture_output=True,
+                text=True,
+                timeout=10
             )
 
-            if not containers:
-                # Fallback: try to find by container name (usually same as service_id)
-                try:
-                    container = self.docker_client.containers.get(service_id)
-                    containers = [container]
-                except docker.errors.NotFound:
-                    return {"state": "not_installed"}
+            if result.returncode != 0:
+                return {"state": "unknown", "error": "Docker command failed"}
 
-            if not containers:
+            output = result.stdout.strip()
+            if not output:
                 return {"state": "not_installed"}
 
-            # Get status of first container (most services have one)
-            container = containers[0]
-            container.reload()
+            # Parse the output
+            parts = output.split('\t')
+            if len(parts) >= 2:
+                name = parts[0]
+                status = parts[1]
+                image = parts[2] if len(parts) > 2 else "unknown"
+                container_id = parts[3] if len(parts) > 3 else "unknown"
 
-            return {
-                "state": container.status,  # running, paused, restarting, exited, etc.
-                "id": container.id[:12],
-                "name": container.name,
-                "image": container.image.tags[0] if container.image.tags else "unknown",
-                "created": container.attrs['Created'],
-                "started_at": container.attrs.get('State', {}).get('StartedAt'),
-            }
+                # Determine state from status string
+                status_lower = status.lower()
+                if 'up' in status_lower:
+                    state = 'running'
+                elif 'exited' in status_lower:
+                    state = 'exited'
+                elif 'paused' in status_lower:
+                    state = 'paused'
+                elif 'restarting' in status_lower:
+                    state = 'restarting'
+                elif 'created' in status_lower:
+                    state = 'created'
+                else:
+                    state = 'unknown'
+
+                return {
+                    "state": state,
+                    "id": container_id[:12],
+                    "name": name,
+                    "image": image,
+                    "status_text": status
+                }
+
+            return {"state": "not_installed"}
 
         except Exception as e:
             logger.error(f"Error getting status for {service_id}: {e}")
@@ -238,7 +261,7 @@ class ContainerManager:
 
     def get_logs(self, service_id, tail=100, follow=False):
         """
-        Get container logs
+        Get container logs using docker CLI
 
         Args:
             service_id: Service identifier
@@ -248,15 +271,21 @@ class ContainerManager:
         Returns:
             str: Container logs
         """
-        if not self.docker_client:
-            return "Docker client not available"
-
         try:
-            container = self.docker_client.containers.get(service_id)
-            logs = container.logs(tail=tail, timestamps=True).decode('utf-8')
-            return logs
-        except docker.errors.NotFound:
-            return f"Container '{service_id}' not found"
+            result = subprocess.run(
+                ['docker', 'logs', service_id, '--tail', str(tail), '--timestamps'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                if 'No such container' in result.stderr:
+                    return f"Container '{service_id}' not found"
+                return f"Error: {result.stderr}"
+
+            return result.stdout
+
         except Exception as e:
             logger.error(f"Error getting logs for {service_id}: {e}")
             return f"Error: {str(e)}"
@@ -308,26 +337,33 @@ class ContainerManager:
 
     def _create_data_directories(self, service_id):
         """
-        Create /home/containers/{service_id} directory structure
+        Create C:\containers\{service_id} directory structure (Windows) or /home/containers/{service_id} (Linux)
 
         Args:
             service_id: Service identifier
         """
-        base_path = Path(f"/home/containers/{service_id}")
+        # Use Windows path for testing, Linux path for production
+        import platform
+        if platform.system() == 'Windows':
+            base_path = Path(f"C:\\containers\\{service_id}")
+        else:
+            base_path = Path(f"/home/containers/{service_id}")
 
         try:
             base_path.mkdir(parents=True, exist_ok=True)
             logger.info(f"Created data directory: {base_path}")
 
-            # Set ownership to PUID:PGID (1000:1000)
-            os.system(f"chown -R 1000:1000 {base_path}")
+            # Set ownership to PUID:PGID (1000:1000) - only on Linux
+            if platform.system() != 'Windows':
+                os.system(f"chown -R 1000:1000 {base_path}")
 
             # Special handling for specific services
             if service_id == 'plex':
                 # Create media subdirectories
                 for subdir in ['media/movies', 'media/tv', 'media/music', 'config', 'transcode']:
                     (base_path / subdir).mkdir(parents=True, exist_ok=True)
-                os.system(f"chown -R 1000:1000 {base_path}")
+                if platform.system() != 'Windows':
+                    os.system(f"chown -R 1000:1000 {base_path}")
                 logger.info(f"Created Plex media directories")
 
         except Exception as e:

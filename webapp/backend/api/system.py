@@ -15,11 +15,19 @@ class SystemMonitor:
 
     def __init__(self):
         """Initialize system monitor"""
-        try:
-            self.docker_client = docker.from_env()
-        except Exception as e:
-            logger.error(f"Failed to initialize Docker client: {e}")
-            self.docker_client = None
+        self._docker_client = None
+
+    @property
+    def docker_client(self):
+        """Lazy initialization of Docker client"""
+        if self._docker_client is None:
+            try:
+                self._docker_client = docker.from_env()
+                logger.info("Docker client initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize Docker client: {e}")
+                self._docker_client = None
+        return self._docker_client
 
     def get_system_info(self):
         """
@@ -90,47 +98,71 @@ class SystemMonitor:
                 return {"error": str(e2)}
 
     def _get_docker_info(self):
-        """Get Docker daemon information"""
-        if not self.docker_client:
-            return {"status": "unavailable"}
+        """Get Docker daemon information using CLI"""
+        import subprocess
 
         try:
-            info = self.docker_client.info()
-            return {
-                "status": "running",
-                "containers_running": info.get('ContainersRunning', 0),
-                "containers_stopped": info.get('ContainersStopped', 0),
-                "containers_total": info.get('Containers', 0),
-                "images": info.get('Images', 0),
-                "server_version": info.get('ServerVersion', 'unknown')
-            }
+            # Check if docker is running
+            result = subprocess.run(
+                ['docker', 'info', '--format', '{{.Containers}}\t{{.ContainersRunning}}\t{{.ContainersStopped}}\t{{.Images}}\t{{.ServerVersion}}'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if result.returncode != 0:
+                return {"status": "unavailable"}
+
+            parts = result.stdout.strip().split('\t')
+            if len(parts) >= 5:
+                return {
+                    "status": "running",
+                    "containers_total": int(parts[0]),
+                    "containers_running": int(parts[1]),
+                    "containers_stopped": int(parts[2]),
+                    "images": int(parts[3]),
+                    "server_version": parts[4]
+                }
+
+            return {"status": "running"}
+
         except Exception as e:
             logger.error(f"Error getting Docker info: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "unavailable"}
 
     def _get_container_stats(self):
-        """Get basic stats for all running containers"""
-        if not self.docker_client:
-            return []
+        """Get basic stats for all running containers using CLI"""
+        import subprocess
 
         try:
-            containers = self.docker_client.containers.list()
+            result = subprocess.run(
+                ['docker', 'ps', '--format', '{{.Names}}\t{{.Status}}\t{{.Image}}'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                return []
+
             stats = []
+            for line in result.stdout.strip().split('\n'):
+                if not line:
+                    continue
 
-            for container in containers:
-                try:
-                    # Get labels to identify openHomeStack services
-                    labels = container.labels
-                    service_name = labels.get('openhomestack.service', container.name)
+                parts = line.split('\t')
+                if len(parts) >= 3:
+                    name = parts[0]
+                    status = parts[1]
+                    image = parts[2]
 
+                    # Extract service name (usually same as container name)
                     stats.append({
-                        "name": container.name,
-                        "service": service_name,
-                        "status": container.status,
-                        "image": container.image.tags[0] if container.image.tags else "unknown"
+                        "name": name,
+                        "service": name,  # Could enhance this by checking labels
+                        "status": "running" if "Up" in status else "unknown",
+                        "image": image
                     })
-                except Exception as e:
-                    logger.warning(f"Error getting stats for container {container.name}: {e}")
 
             return stats
 

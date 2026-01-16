@@ -97,15 +97,39 @@ class ServiceManager:
             with open(compose_file, 'r') as f:
                 compose_data = yaml.safe_load(f)
 
-            # Get the first service definition (most services have one container)
+            # Get service definitions
             services = compose_data.get('services', {})
             if not services:
                 logger.warning(f"No services defined in {compose_file}")
                 return None
 
-            # Get the first service's labels
-            first_service = list(services.values())[0]
-            labels = first_service.get('labels', [])
+            # Find the service with openhomestack labels (usually first, but check all)
+            labels = []
+            for service in services.values():
+                service_labels = service.get('labels', [])
+                # Check if this service has openhomestack labels
+                if service_labels:
+                    # Convert to list if dict
+                    if isinstance(service_labels, dict):
+                        label_list = [f"{k}={v}" for k, v in service_labels.items()]
+                    else:
+                        label_list = service_labels
+
+                    # Check if any label starts with openhomestack
+                    has_openhomestack = any(
+                        (isinstance(lbl, str) and lbl.startswith('openhomestack.')) or
+                        (isinstance(lbl, dict) and any(k.startswith('openhomestack.') for k in lbl.keys()))
+                        for lbl in ([label_list] if isinstance(label_list, str) else label_list)
+                    )
+
+                    if has_openhomestack:
+                        labels = service_labels
+                        break
+
+            # If no service has openhomestack labels, use first service
+            if not labels:
+                first_service = list(services.values())[0]
+                labels = first_service.get('labels', [])
 
             # Parse labels into metadata
             metadata = self._parse_labels(labels)
