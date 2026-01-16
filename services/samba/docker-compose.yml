@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  samba:
+    image: dperson/samba:latest
+    container_name: samba
+    network_mode: host
+    environment:
+      - TZ=America/Chicago
+      - USERID=1000
+      - GROUPID=1000
+      # Samba share configuration
+      # Format: -s "name;/path;yes;no;no;all;none"
+      # name: Share name
+      # /path: Path to share
+      # yes: Browseable
+      # no: Read only (no = read/write)
+      # no: Guest ok
+      # all: Valid users (all = everyone)
+      # none: Admin users
+      - SHARE=containers;/containers;yes;no;no;all;none
+    volumes:
+      # Share the entire /home/containers directory
+      - /home/containers:/containers
+    restart: unless-stopped
+    labels:
+      # Metadata for openHomeStack dashboard
+      - "openhomestack.service=samba"
+      - "openhomestack.name=Samba File Share"
+      - "openhomestack.description=Network file sharing for managing container data"
+      - "openhomestack.icon=folder"
+      - "openhomestack.category=management"
+      - "openhomestack.url="
