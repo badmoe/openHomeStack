@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+    volumes:
+      - /home/containers/homeassistant/config:/config
+    restart: unless-stopped
+    privileged: true
+    devices:
+      # USB devices for Zigbee/Z-Wave (optional - comment out if not using)
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    labels:
+      # Metadata for openHomeStack dashboard
+      - "openhomestack.service=homeassistant"
+      - "openhomestack.name=Home Assistant"
+      - "openhomestack.description=Smart home automation and device control"
+      - "openhomestack.icon=home"
+      - "openhomestack.category=automation"
+      - "openhomestack.url=http://localhost:8123"
