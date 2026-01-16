@@ -10,8 +10,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - /home/containers/monitoring/prometheus:/prometheus
-      - /home/containers/monitoring/prometheus-config:/etc/prometheus
+      - C:\containers\monitoring\prometheus:/prometheus
+      - C:\containers\monitoring\prometheus-config:/etc/prometheus
     restart: unless-stopped
 
   grafana:
@@ -23,7 +23,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_INSTALL_PLUGINS=
     volumes:
-      - /home/containers/monitoring/grafana:/var/lib/grafana
+      - C:\containers\monitoring\grafana:/var/lib/grafana
     restart: unless-stopped
     depends_on:
       - prometheus

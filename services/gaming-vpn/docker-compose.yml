@@ -18,8 +18,9 @@ services:
       - INTERNAL_SUBNET=10.13.13.0
       - ALLOWEDIPS=10.13.13.0/24
     volumes:
-      - /home/containers/gaming-vpn/config:/config
-      - /lib/modules:/lib/modules
+      - C:\containers\gaming-vpn\config:/config
+      # /lib/modules mount removed for Windows testing - required on Linux
+      # - /lib/modules:/lib/modules
     ports:
       - "51820:51820/udp"
     sysctls:

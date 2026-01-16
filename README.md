@@ -4,6 +4,8 @@
 
 This project is actively being designed and documented. It is not yet recommended for deployment in any environment.
 
+**⚠️ BEFORE PRODUCTION: Paths will need to be changed from Windows to Linux for persistent storage volumes on containers.** The current docker-compose files use `C:\containers` for testing on Windows. For Linux deployment, all volume paths must be updated to `/home/containers`.
+
 ## Overview
 
 openHomeStack is an open-source, turnkey home server solution that transforms bare metal hardware into a fully configured self-hosted platform. Designed for gamers, media enthusiasts, and homelab users, it provides a bootable installation that deploys Proxmox, provisions an Ubuntu VM, and offers a web-based dashboard for managing containerized services.

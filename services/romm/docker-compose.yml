@@ -4,28 +4,31 @@ services:
   romm:
     image: rommapp/romm:latest
     container_name: romm
-    network_mode: host
+    ports:
+      - "8080:8080"
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=America/Chicago
       # Database configuration
-      - DB_HOST=localhost
+      - DB_HOST=romm-db
       - DB_PORT=3306
       - DB_USER=romm
       - DB_NAME=romm
       - DB_PASSWD=${ROMM_DB_PASSWORD:-romm}
+      # Authentication secret key (required)
+      - ROMM_AUTH_SECRET_KEY=${ROMM_AUTH_SECRET_KEY:-changeme-secret-key-for-romm}
       # Optional: IGDB API credentials for enhanced metadata
       - IGDB_CLIENT_ID=${IGDB_CLIENT_ID:-}
       - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:-}
     volumes:
       # ROMM application data and database
-      - /home/containers/romm/data:/romm/library
-      - /home/containers/romm/config:/romm/config
+      - C:\containers\romm\data:/romm/library
+      - C:\containers\romm\config:/romm/config
       # ROM files - organized by platform
-      - /home/containers/romm/roms:/romm/roms
+      - C:\containers\romm\roms:/romm/roms
       # Assets (covers, screenshots, etc.)
-      - /home/containers/romm/assets:/romm/assets
+      - C:\containers\romm\assets:/romm/assets
     restart: unless-stopped
     depends_on:
       - romm-db
@@ -45,12 +48,13 @@ services:
   romm-db:
     image: mariadb:latest
     container_name: romm-db
+    ports:
+      - "3306:3306"
     environment:
       - MYSQL_ROOT_PASSWORD=${ROMM_DB_PASSWORD:-romm}
       - MYSQL_DATABASE=romm
       - MYSQL_USER=romm
       - MYSQL_PASSWORD=${ROMM_DB_PASSWORD:-romm}
     volumes:
-      - /home/containers/romm/database:/var/lib/mysql
+      - C:\containers\romm\database:/var/lib/mysql
     restart: unless-stopped
-    network_mode: host
