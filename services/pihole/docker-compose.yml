@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    hostname: pihole
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+      - "80:80/tcp"
+    environment:
+      - TZ=America/Chicago
+      - WEBPASSWORD=${PIHOLE_PASSWORD:-admin}
+      - FTLCONF_LOCAL_IPV4=${SERVER_IP:-192.168.1.100}
+      # DNS settings
+      - PIHOLE_DNS_=1.1.1.1;1.0.0.1
+      - DNSMASQ_LISTENING=all
+    volumes:
+      - /home/containers/pihole/etc-pihole:/etc/pihole
+      - /home/containers/pihole/etc-dnsmasq.d:/etc/dnsmasq.d
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    labels:
+      # Metadata for openHomeStack dashboard
+      - "openhomestack.service=pihole"
+      - "openhomestack.name=Pi-hole"
+      - "openhomestack.description=Network-wide ad blocking and DNS management"
+      - "openhomestack.icon=shield"
+      - "openhomestack.category=networking"
+      - "openhomestack.url=http://localhost/admin"
+      # Installation prompts for web dashboard
+      - "openhomestack.install.prompt.password=Web Admin Password"
+      - "openhomestack.install.prompt.server_ip=Server IP Address (e.g., 192.168.1.100)"
