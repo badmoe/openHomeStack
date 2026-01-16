@@ -201,15 +201,17 @@ class ContainerManager:
     def get_status(self, service_id):
         """
         Get current status of service containers
-        Uses docker CLI commands for better Windows compatibility
+        Uses docker CLI with label filtering to find containers belonging to a service
 
         Returns:
             dict: Container status information
         """
         try:
-            # Try to get status using docker ps command
+            # Use label filter to find containers belonging to this service
+            # This handles services where container_name differs from service_id
             result = subprocess.run(
-                ['docker', 'ps', '-a', '--filter', f'name=^{service_id}$', '--format', '{{.Names}}\t{{.Status}}\t{{.Image}}\t{{.ID}}'],
+                ['docker', 'ps', '-a', '--filter', f'label=openhomestack.service={service_id}',
+                 '--format', '{{.Names}}\t{{.Status}}\t{{.Image}}\t{{.ID}}'],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -222,38 +224,65 @@ class ContainerManager:
             if not output:
                 return {"state": "not_installed"}
 
-            # Parse the output
-            parts = output.split('\t')
-            if len(parts) >= 2:
-                name = parts[0]
-                status = parts[1]
-                image = parts[2] if len(parts) > 2 else "unknown"
-                container_id = parts[3] if len(parts) > 3 else "unknown"
+            # Parse the output - may have multiple containers for multi-container services
+            containers = []
+            for line in output.split('\n'):
+                if not line.strip():
+                    continue
+                parts = line.split('\t')
+                if len(parts) >= 2:
+                    name = parts[0]
+                    status = parts[1]
+                    image = parts[2] if len(parts) > 2 else "unknown"
+                    container_id = parts[3] if len(parts) > 3 else "unknown"
 
-                # Determine state from status string
-                status_lower = status.lower()
-                if 'up' in status_lower:
-                    state = 'running'
-                elif 'exited' in status_lower:
-                    state = 'exited'
-                elif 'paused' in status_lower:
-                    state = 'paused'
-                elif 'restarting' in status_lower:
-                    state = 'restarting'
-                elif 'created' in status_lower:
-                    state = 'created'
-                else:
-                    state = 'unknown'
+                    # Determine state from status string
+                    status_lower = status.lower()
+                    if 'up' in status_lower:
+                        state = 'running'
+                    elif 'exited' in status_lower:
+                        state = 'exited'
+                    elif 'paused' in status_lower:
+                        state = 'paused'
+                    elif 'restarting' in status_lower:
+                        state = 'restarting'
+                    elif 'created' in status_lower:
+                        state = 'created'
+                    else:
+                        state = 'unknown'
 
-                return {
-                    "state": state,
-                    "id": container_id[:12],
-                    "name": name,
-                    "image": image,
-                    "status_text": status
-                }
+                    containers.append({
+                        "state": state,
+                        "id": container_id[:12] if len(container_id) >= 12 else container_id,
+                        "name": name,
+                        "image": image,
+                        "status_text": status
+                    })
 
-            return {"state": "not_installed"}
+            if not containers:
+                return {"state": "not_installed"}
+
+            # For single container services, return simple status
+            if len(containers) == 1:
+                return containers[0]
+
+            # For multi-container services, determine overall state
+            # Running if any container is running, otherwise use first container's state
+            states = [c['state'] for c in containers]
+            if 'running' in states:
+                overall_state = 'running'
+            elif 'restarting' in states:
+                overall_state = 'restarting'
+            elif all(s == 'exited' for s in states):
+                overall_state = 'exited'
+            else:
+                overall_state = containers[0]['state']
+
+            return {
+                "state": overall_state,
+                "containers": containers,
+                "container_count": len(containers)
+            }
 
         except Exception as e:
             logger.error(f"Error getting status for {service_id}: {e}")
@@ -272,19 +301,42 @@ class ContainerManager:
             str: Container logs
         """
         try:
-            result = subprocess.run(
-                ['docker', 'logs', service_id, '--tail', str(tail), '--timestamps'],
+            # First, find the container(s) by label
+            find_result = subprocess.run(
+                ['docker', 'ps', '-a', '--filter', f'label=openhomestack.service={service_id}',
+                 '--format', '{{.Names}}'],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=10
             )
 
-            if result.returncode != 0:
-                if 'No such container' in result.stderr:
-                    return f"Container '{service_id}' not found"
-                return f"Error: {result.stderr}"
+            if find_result.returncode != 0:
+                return f"Error finding containers: {find_result.stderr}"
 
-            return result.stdout
+            container_names = [n.strip() for n in find_result.stdout.strip().split('\n') if n.strip()]
+
+            if not container_names:
+                return f"No containers found for service '{service_id}'"
+
+            # Get logs from all containers (useful for multi-container services)
+            all_logs = []
+            for container_name in container_names:
+                result = subprocess.run(
+                    ['docker', 'logs', container_name, '--tail', str(tail), '--timestamps'],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+
+                if result.returncode == 0:
+                    if len(container_names) > 1:
+                        all_logs.append(f"=== {container_name} ===\n{result.stdout}")
+                    else:
+                        all_logs.append(result.stdout)
+                else:
+                    all_logs.append(f"=== {container_name} ===\nError: {result.stderr}")
+
+            return '\n'.join(all_logs)
 
         except Exception as e:
             logger.error(f"Error getting logs for {service_id}: {e}")
@@ -337,13 +389,14 @@ class ContainerManager:
 
     def _create_data_directories(self, service_id):
         """
-        Create C:\containers\{service_id} directory structure (Windows) or /home/containers/{service_id} (Linux)
+        Create /home/containers/{service_id} directory structure and deploy default configs
 
         Args:
             service_id: Service identifier
         """
-        # Use Windows path for testing, Linux path for production
         import platform
+        import shutil
+
         if platform.system() == 'Windows':
             base_path = Path(f"C:\\containers\\{service_id}")
         else:
@@ -353,22 +406,82 @@ class ContainerManager:
             base_path.mkdir(parents=True, exist_ok=True)
             logger.info(f"Created data directory: {base_path}")
 
+            # Get service directory for config templates
+            service_dir = self.service_manager.get_service_dir(service_id)
+            config_template_dir = service_dir / 'config'
+
+            # Deploy default config files if they exist in the service directory
+            if config_template_dir.exists() and config_template_dir.is_dir():
+                self._deploy_config_files(service_id, config_template_dir, base_path)
+
+            # Special handling for specific services
+            if service_id == 'plex':
+                for subdir in ['media/movies', 'media/tv', 'media/music', 'config', 'transcode']:
+                    (base_path / subdir).mkdir(parents=True, exist_ok=True)
+                logger.info(f"Created Plex media directories")
+
+            elif service_id == 'dns':
+                (base_path / 'config').mkdir(parents=True, exist_ok=True)
+
+            elif service_id == 'monitoring':
+                for subdir in ['prometheus', 'prometheus-config', 'grafana']:
+                    (base_path / subdir).mkdir(parents=True, exist_ok=True)
+
+            elif service_id == 'pihole':
+                for subdir in ['etc-pihole', 'etc-dnsmasq.d']:
+                    (base_path / subdir).mkdir(parents=True, exist_ok=True)
+
+            elif service_id == 'homeassistant':
+                (base_path / 'config').mkdir(parents=True, exist_ok=True)
+
+            elif service_id == 'gaming-vpn':
+                (base_path / 'config').mkdir(parents=True, exist_ok=True)
+
             # Set ownership to PUID:PGID (1000:1000) - only on Linux
             if platform.system() != 'Windows':
                 os.system(f"chown -R 1000:1000 {base_path}")
 
-            # Special handling for specific services
-            if service_id == 'plex':
-                # Create media subdirectories
-                for subdir in ['media/movies', 'media/tv', 'media/music', 'config', 'transcode']:
-                    (base_path / subdir).mkdir(parents=True, exist_ok=True)
-                if platform.system() != 'Windows':
-                    os.system(f"chown -R 1000:1000 {base_path}")
-                logger.info(f"Created Plex media directories")
-
         except Exception as e:
             logger.error(f"Error creating data directories for {service_id}: {e}")
             raise
+
+    def _deploy_config_files(self, service_id, config_template_dir, base_path):
+        """
+        Deploy default configuration files from service template directory
+
+        Args:
+            service_id: Service identifier
+            config_template_dir: Path to config templates in service directory
+            base_path: Destination base path for container data
+        """
+        import shutil
+
+        try:
+            # Map service configs to their deployment locations
+            config_mappings = {
+                'dns': {'config/Corefile': 'config/Corefile'},
+                'monitoring': {'config/prometheus.yml': 'prometheus-config/prometheus.yml'},
+            }
+
+            mappings = config_mappings.get(service_id, {})
+
+            for src_rel, dst_rel in mappings.items():
+                src_path = config_template_dir.parent / src_rel
+                dst_path = base_path / dst_rel
+
+                if src_path.exists():
+                    # Create destination directory if needed
+                    dst_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    # Only copy if destination doesn't exist (don't overwrite user configs)
+                    if not dst_path.exists():
+                        shutil.copy2(src_path, dst_path)
+                        logger.info(f"Deployed config: {src_rel} -> {dst_path}")
+                    else:
+                        logger.info(f"Config already exists, skipping: {dst_path}")
+
+        except Exception as e:
+            logger.warning(f"Error deploying config files for {service_id}: {e}")
 
     def _create_env_file(self, service_dir, env_vars):
         """

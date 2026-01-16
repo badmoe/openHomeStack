@@ -1,0 +1,13 @@
+.:53 {
+    # Forward all queries to upstream DNS (Cloudflare)
+    forward . 1.1.1.1 1.0.0.1
+
+    # Enable query logging
+    log
+
+    # Handle errors
+    errors
+
+    # Cache responses for 30 seconds
+    cache 30
+}

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   plex:
     image: lscr.io/linuxserver/plex:latest
@@ -23,10 +21,10 @@ services:
       # Optional: Transcode directory (can use tmpfs for better performance)
       - /home/containers/plex/transcode:/transcode
     restart: unless-stopped
-    devices:
-      # Hardware transcoding support (Intel QuickSync)
-      # Comment out if your CPU doesn't support it or you don't have /dev/dri
-      - /dev/dri:/dev/dri
+    # Uncomment the devices section below to enable hardware transcoding (Intel QuickSync/VAAPI)
+    # Requires /dev/dri to exist on your system (GPU with hardware encoding support)
+    # devices:
+    #   - /dev/dri:/dev/dri
     labels:
       # Metadata for openHomeStack dashboard
       - "openhomestack.service=plex"

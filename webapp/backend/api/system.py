@@ -98,45 +98,69 @@ class SystemMonitor:
                 return {"error": str(e2)}
 
     def _get_docker_info(self):
-        """Get Docker daemon information using CLI"""
+        """Get Docker daemon information using CLI, filtered to openHomeStack services only"""
         import subprocess
 
         try:
-            # Check if docker is running
-            result = subprocess.run(
-                ['docker', 'info', '--format', '{{.Containers}}\t{{.ContainersRunning}}\t{{.ContainersStopped}}\t{{.Images}}\t{{.ServerVersion}}'],
+            # Check if docker is running and get version
+            version_result = subprocess.run(
+                ['docker', 'info', '--format', '{{.ServerVersion}}'],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
 
-            if result.returncode != 0:
+            if version_result.returncode != 0:
                 return {"status": "unavailable"}
 
-            parts = result.stdout.strip().split('\t')
-            if len(parts) >= 5:
-                return {
-                    "status": "running",
-                    "containers_total": int(parts[0]),
-                    "containers_running": int(parts[1]),
-                    "containers_stopped": int(parts[2]),
-                    "images": int(parts[3]),
-                    "server_version": parts[4]
-                }
+            server_version = version_result.stdout.strip()
 
-            return {"status": "running"}
+            # Count only openHomeStack containers (those with our label)
+            running_result = subprocess.run(
+                ['docker', 'ps', '-q', '--filter', 'label=openhomestack.service'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            running_count = len([l for l in running_result.stdout.strip().split('\n') if l])
+
+            stopped_result = subprocess.run(
+                ['docker', 'ps', '-aq', '--filter', 'label=openhomestack.service', '--filter', 'status=exited'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            stopped_count = len([l for l in stopped_result.stdout.strip().split('\n') if l])
+
+            total_result = subprocess.run(
+                ['docker', 'ps', '-aq', '--filter', 'label=openhomestack.service'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            total_count = len([l for l in total_result.stdout.strip().split('\n') if l])
+
+            return {
+                "status": "running",
+                "containers_total": total_count,
+                "containers_running": running_count,
+                "containers_stopped": stopped_count,
+                "server_version": server_version
+            }
 
         except Exception as e:
             logger.error(f"Error getting Docker info: {e}")
             return {"status": "unavailable"}
 
     def _get_container_stats(self):
-        """Get basic stats for all running containers using CLI"""
+        """Get basic stats for openHomeStack containers only"""
         import subprocess
 
         try:
+            # Only get containers with our label
             result = subprocess.run(
-                ['docker', 'ps', '--format', '{{.Names}}\t{{.Status}}\t{{.Image}}'],
+                ['docker', 'ps', '--filter', 'label=openhomestack.service',
+                 '--format', '{{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Label "openhomestack.service"}}'],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -155,11 +179,11 @@ class SystemMonitor:
                     name = parts[0]
                     status = parts[1]
                     image = parts[2]
+                    service = parts[3] if len(parts) > 3 else name
 
-                    # Extract service name (usually same as container name)
                     stats.append({
                         "name": name,
-                        "service": name,  # Could enhance this by checking labels
+                        "service": service,
                         "status": "running" if "Up" in status else "unknown",
                         "image": image
                     })
