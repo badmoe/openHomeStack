@@ -437,6 +437,11 @@ class ContainerManager:
             elif service_id == 'gaming-vpn':
                 (base_path / 'config').mkdir(parents=True, exist_ok=True)
 
+            elif service_id == 'jellyfin':
+                for subdir in ['media/movies', 'media/tv', 'media/music', 'config', 'cache']:
+                    (base_path / subdir).mkdir(parents=True, exist_ok=True)
+                logger.info(f"Created Jellyfin media directories")
+
             # Set ownership to PUID:PGID (1000:1000) - only on Linux
             # Use docker to fix permissions since backend may run in container without host privileges
             if platform.system() != 'Windows':

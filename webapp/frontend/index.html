@@ -94,17 +94,54 @@
             </div>
         </div>
 
-        <!-- Add Service Modal -->
+        <!-- Add Service Wizard Modal -->
         <div id="addServiceModal" class="modal">
             <div class="modal-content add-service-modal">
                 <div class="modal-header">
-                    <h2>Add Service</h2>
+                    <h2 id="wizardTitle">Add Service</h2>
                     <span class="close" onclick="closeAddServiceModal()">&times;</span>
                 </div>
-                <div class="modal-body" id="addServiceBody">
-                    <div class="available-services-list" id="availableServicesList">
-                        <!-- Populated by JavaScript -->
+                <div class="wizard-steps">
+                    <div class="wizard-step active" data-step="1">
+                        <span class="step-number">1</span>
+                        <span class="step-label">Category</span>
                     </div>
+                    <div class="wizard-step" data-step="2">
+                        <span class="step-number">2</span>
+                        <span class="step-label">Service</span>
+                    </div>
+                    <div class="wizard-step" data-step="3">
+                        <span class="step-number">3</span>
+                        <span class="step-label">Configure</span>
+                    </div>
+                </div>
+                <div class="modal-body" id="addServiceBody">
+                    <!-- Step 1: Category Selection -->
+                    <div class="wizard-content" id="wizardStep1">
+                        <p class="wizard-instruction">Select a service category:</p>
+                        <div class="category-list" id="categoryList">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                    <!-- Step 2: Service Selection -->
+                    <div class="wizard-content" id="wizardStep2" style="display: none;">
+                        <p class="wizard-instruction">Select a service to install:</p>
+                        <div class="available-services-list" id="serviceList">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                    <!-- Step 3: Configuration -->
+                    <div class="wizard-content" id="wizardStep3" style="display: none;">
+                        <div id="configForm">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer wizard-footer">
+                    <button class="btn btn-secondary" id="wizardBackBtn" onclick="wizardBack()" style="display: none;">Back</button>
+                    <button class="btn btn-secondary" onclick="closeAddServiceModal()">Cancel</button>
+                    <button class="btn btn-primary" id="wizardNextBtn" onclick="wizardNext()" style="display: none;">Next</button>
+                    <button class="btn btn-primary" id="wizardInstallBtn" onclick="wizardInstall()" style="display: none;">Install</button>
                 </div>
             </div>
         </div>

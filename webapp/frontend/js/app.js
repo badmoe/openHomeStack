@@ -1,5 +1,6 @@
 /**
  * openHomeStack Frontend Application
+ * Version: 1.2 (with DNS warning feature)
  */
 
 // Global state
@@ -7,6 +8,11 @@ let allServices = [];
 let currentCategory = 'all';
 let currentServiceForInstall = null;
 let currentServiceForLogs = null;
+
+// Wizard state
+let wizardStep = 1;
+let wizardSelectedCategory = null;
+let wizardSelectedService = null;
 
 // Icon mapping for services
 const serviceIcons = {
@@ -20,11 +26,21 @@ const serviceIcons = {
     'box': 'fa-box'
 };
 
+// Category icons and display names
+const categoryConfig = {
+    'media': { icon: 'fa-film', name: 'Media' },
+    'dns': { icon: 'fa-shield-halved', name: 'DNS & Ad Blocking' },
+    'networking': { icon: 'fa-network-wired', name: 'Networking' },
+    'automation': { icon: 'fa-home', name: 'Automation' },
+    'management': { icon: 'fa-chart-line', name: 'Management' },
+    'other': { icon: 'fa-box', name: 'Other' }
+};
+
 /**
  * Initialize the application
  */
 async function init() {
-    console.log('Initializing openHomeStack Dashboard...');
+    console.log('openHomeStack Dashboard v1.2 - Initializing...');
 
     // Set up category tab listeners
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -111,6 +127,24 @@ function getInstalledServices() {
  */
 function getAvailableServices() {
     return allServices.filter(s => !s.status?.state || s.status.state === 'not_installed');
+}
+
+/**
+ * Get available services grouped by category
+ */
+function getAvailableServicesByCategory() {
+    const available = getAvailableServices();
+    const grouped = {};
+
+    available.forEach(service => {
+        const cat = service.category || 'other';
+        if (!grouped[cat]) {
+            grouped[cat] = [];
+        }
+        grouped[cat].push(service);
+    });
+
+    return grouped;
 }
 
 /**
@@ -244,42 +278,25 @@ function switchCategory(category) {
     renderServices();
 }
 
+// ============================================
+// Wizard Functions
+// ============================================
+
 /**
- * Show Add Service modal with available services
+ * Show Add Service wizard modal
  */
-function showAddServiceModal() {
-    const availableServices = getAvailableServices();
-    const listContainer = document.getElementById('availableServicesList');
+async function showAddServiceModal() {
+    // Refresh services to get latest status before showing wizard
+    await loadServices();
 
-    if (availableServices.length === 0) {
-        listContainer.innerHTML = `
-            <div class="no-services-available">
-                <i class="fas fa-check-circle"></i>
-                <p>All available services are already installed!</p>
-            </div>
-        `;
-    } else {
-        // Sort by category then name
-        availableServices.sort((a, b) => {
-            const catCompare = (a.category || '').localeCompare(b.category || '');
-            if (catCompare !== 0) return catCompare;
-            return (a.name || '').localeCompare(b.name || '');
-        });
+    // Reset wizard state
+    wizardStep = 1;
+    wizardSelectedCategory = null;
+    wizardSelectedService = null;
 
-        listContainer.innerHTML = availableServices.map(service => {
-            const icon = serviceIcons[service.icon] || 'fa-box';
-            return `
-                <div class="available-service-item" onclick="showInstallModal('${service.id}')">
-                    <i class="available-service-icon fas ${icon}"></i>
-                    <div class="available-service-info">
-                        <div class="available-service-name">${service.name || service.id}</div>
-                        <div class="available-service-description">${service.description || ''}</div>
-                    </div>
-                    <span class="available-service-category">${service.category || 'other'}</span>
-                </div>
-            `;
-        }).join('');
-    }
+    // Update UI
+    updateWizardStep();
+    populateWizardStep1();
 
     document.getElementById('addServiceModal').style.display = 'block';
 }
@@ -289,54 +306,384 @@ function showAddServiceModal() {
  */
 function closeAddServiceModal() {
     document.getElementById('addServiceModal').style.display = 'none';
+    wizardStep = 1;
+    wizardSelectedCategory = null;
+    wizardSelectedService = null;
 }
 
 /**
- * Show install modal for a service
+ * Update wizard step indicators and visibility
  */
-async function showInstallModal(serviceId) {
-    // Close the add service modal first
-    closeAddServiceModal();
+function updateWizardStep() {
+    // Update step indicators
+    document.querySelectorAll('.wizard-step').forEach(stepEl => {
+        const step = parseInt(stepEl.dataset.step);
+        stepEl.classList.remove('active', 'completed');
+        if (step === wizardStep) {
+            stepEl.classList.add('active');
+        } else if (step < wizardStep) {
+            stepEl.classList.add('completed');
+        }
+    });
+
+    // Update content visibility
+    document.getElementById('wizardStep1').style.display = wizardStep === 1 ? 'block' : 'none';
+    document.getElementById('wizardStep2').style.display = wizardStep === 2 ? 'block' : 'none';
+    document.getElementById('wizardStep3').style.display = wizardStep === 3 ? 'block' : 'none';
+
+    // Update buttons
+    const backBtn = document.getElementById('wizardBackBtn');
+    const nextBtn = document.getElementById('wizardNextBtn');
+    const installBtn = document.getElementById('wizardInstallBtn');
+
+    backBtn.style.display = wizardStep > 1 ? 'inline-block' : 'none';
+    nextBtn.style.display = wizardStep < 3 ? 'inline-block' : 'none';
+    installBtn.style.display = wizardStep === 3 ? 'inline-block' : 'none';
+
+    // Update title
+    const titles = {
+        1: 'Add Service - Select Category',
+        2: 'Add Service - Select Service',
+        3: `Install ${wizardSelectedService?.name || 'Service'}`
+    };
+    document.getElementById('wizardTitle').textContent = titles[wizardStep];
+}
+
+/**
+ * Populate Step 1: Category Selection
+ */
+function populateWizardStep1() {
+    const grouped = getAvailableServicesByCategory();
+    const categoryList = document.getElementById('categoryList');
+
+    if (Object.keys(grouped).length === 0) {
+        categoryList.innerHTML = `
+            <div class="no-services-available">
+                <i class="fas fa-check-circle"></i>
+                <p>All available services are already installed!</p>
+            </div>
+        `;
+        document.getElementById('wizardNextBtn').style.display = 'none';
+        return;
+    }
+
+    // Sort categories
+    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+        const nameA = categoryConfig[a]?.name || a;
+        const nameB = categoryConfig[b]?.name || b;
+        return nameA.localeCompare(nameB);
+    });
+
+    categoryList.innerHTML = sortedCategories.map(cat => {
+        const config = categoryConfig[cat] || { icon: 'fa-box', name: cat };
+        const count = grouped[cat].length;
+        const selected = wizardSelectedCategory === cat ? 'selected' : '';
+
+        return `
+            <div class="category-item ${selected}" onclick="selectCategory('${cat}')">
+                <i class="category-icon fas ${config.icon}"></i>
+                <div class="category-info">
+                    <div class="category-name">${config.name}</div>
+                    <div class="category-count">${count} service${count !== 1 ? 's' : ''} available</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Select a category in step 1
+ */
+function selectCategory(category) {
+    wizardSelectedCategory = category;
+
+    // Update UI to show selection
+    document.querySelectorAll('.category-item').forEach(el => {
+        el.classList.remove('selected');
+    });
+    event.currentTarget.classList.add('selected');
+
+    // Check for DNS conflict warning (case-insensitive comparison)
+    if (category.toLowerCase() === 'dns') {
+        const installedServices = getInstalledServices();
+        const installedDnsServices = installedServices.filter(s =>
+            s.category && s.category.toLowerCase() === 'dns'
+        );
+
+        if (installedDnsServices.length > 0) {
+            const installedNames = installedDnsServices.map(s => s.name || s.id).join(', ');
+            showDnsWarning(installedNames);
+            return; // Don't auto-advance until they acknowledge
+        }
+    }
+
+    // Proceed to service selection step
+    proceedWithCategorySelection(category);
+}
+
+/**
+ * Proceed with category selection (after warning acknowledged or no warning needed)
+ */
+function proceedWithCategorySelection(category) {
+    // Always show step 2 (service selection)
+    wizardStep = 2;
+    updateWizardStep();
+    populateWizardStep2();
+}
+
+/**
+ * Show DNS conflict warning
+ */
+function showDnsWarning(installedNames) {
+    const warningHtml = `
+        <div class="dns-warning">
+            <div class="dns-warning-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="dns-warning-content">
+                <h3>DNS Service Already Installed</h3>
+                <p>You already have <strong>${installedNames}</strong> installed.</p>
+                <p>Running multiple DNS services simultaneously can cause port conflicts and unexpected network behavior. Consider removing the existing DNS service before installing a new one, or ensure they are configured to use different ports.</p>
+            </div>
+            <div class="dns-warning-actions">
+                <button class="btn btn-secondary" onclick="dismissDnsWarning()">Go Back</button>
+                <button class="btn btn-warning" onclick="acknowledgeDnsWarning()">Continue Anyway</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('wizardStep1').innerHTML = warningHtml;
+    document.getElementById('wizardNextBtn').style.display = 'none';
+}
+
+/**
+ * Restore the wizard step 1 structure (after warning replaced it)
+ */
+function restoreWizardStep1Structure() {
+    document.getElementById('wizardStep1').innerHTML = `
+        <p class="wizard-instruction">Select a service category:</p>
+        <div class="category-list" id="categoryList">
+        </div>
+    `;
+}
+
+/**
+ * Dismiss DNS warning and go back to category selection
+ */
+function dismissDnsWarning() {
+    wizardSelectedCategory = null;
+    restoreWizardStep1Structure();
+    populateWizardStep1();
+    document.getElementById('wizardNextBtn').style.display = 'inline-block';
+}
+
+/**
+ * Acknowledge DNS warning and continue
+ */
+function acknowledgeDnsWarning() {
+    restoreWizardStep1Structure();
+    populateWizardStep1();
+    document.getElementById('wizardNextBtn').style.display = 'inline-block';
+
+    // Re-select the DNS category visually
+    document.querySelectorAll('.category-item').forEach(el => {
+        if (el.textContent.includes('DNS')) {
+            el.classList.add('selected');
+        }
+    });
+
+    // Proceed with the selection
+    proceedWithCategorySelection(wizardSelectedCategory);
+}
+
+/**
+ * Populate Step 2: Service Selection
+ */
+function populateWizardStep2() {
+    const grouped = getAvailableServicesByCategory();
+    const services = grouped[wizardSelectedCategory] || [];
+    const serviceList = document.getElementById('serviceList');
+
+    serviceList.innerHTML = services.map(service => {
+        const icon = serviceIcons[service.icon] || 'fa-box';
+        const selected = wizardSelectedService?.id === service.id ? 'selected' : '';
+
+        return `
+            <div class="available-service-item ${selected}" onclick="selectService('${service.id}')">
+                <i class="available-service-icon fas ${icon}"></i>
+                <div class="available-service-info">
+                    <div class="available-service-name">${service.name || service.id}</div>
+                    <div class="available-service-description">${service.description || ''}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Select a service in step 2
+ */
+function selectService(serviceId) {
+    const available = getAvailableServices();
+    wizardSelectedService = available.find(s => s.id === serviceId);
+
+    // Update UI to show selection
+    document.querySelectorAll('.available-service-item').forEach(el => {
+        el.classList.remove('selected');
+    });
+    event.currentTarget.classList.add('selected');
+}
+
+/**
+ * Populate Step 3: Configuration Form
+ */
+async function populateWizardStep3() {
+    const configForm = document.getElementById('configForm');
+
+    if (!wizardSelectedService) {
+        configForm.innerHTML = '<p>No service selected.</p>';
+        return;
+    }
 
     try {
-        const response = await API.getService(serviceId);
+        // Fetch full service details including install prompts
+        const response = await API.getService(wizardSelectedService.id);
         const service = response.service;
-        currentServiceForInstall = service;
-
-        document.getElementById('modalTitle').textContent = `Install ${service.name}`;
+        wizardSelectedService = service; // Update with full details
 
         const prompts = service.install_prompts || [];
 
         if (prompts.length === 0) {
-            document.getElementById('modalBody').innerHTML = `
+            configForm.innerHTML = `
                 <p>Ready to install <strong>${service.name}</strong>?</p>
                 <p class="form-help">This service requires no additional configuration.</p>
             `;
         } else {
             const formHtml = prompts.map(prompt => `
                 <div class="form-group">
-                    <label for="input-${prompt.env_var}">${prompt.label}</label>
+                    <label for="wizard-input-${prompt.env_var}">${prompt.label}</label>
                     <input
                         type="text"
-                        id="input-${prompt.env_var}"
+                        id="wizard-input-${prompt.env_var}"
                         name="${prompt.env_var}"
+                        class="wizard-input"
                         placeholder="Enter ${prompt.label.toLowerCase()}"
                     >
                 </div>
             `).join('');
 
-            document.getElementById('modalBody').innerHTML = formHtml;
+            configForm.innerHTML = formHtml;
         }
-
-        document.getElementById('installModal').style.display = 'block';
     } catch (error) {
         console.error('Failed to load service details:', error);
-        showError('Failed to load service details');
+        configForm.innerHTML = '<p>Failed to load service configuration.</p>';
     }
 }
 
 /**
- * Close install modal
+ * Go back one step in the wizard
+ */
+function wizardBack() {
+    if (wizardStep > 1) {
+        wizardStep--;
+        updateWizardStep();
+
+        if (wizardStep === 1) {
+            populateWizardStep1();
+        } else if (wizardStep === 2) {
+            populateWizardStep2();
+        }
+    }
+}
+
+/**
+ * Go to next step in the wizard
+ */
+function wizardNext() {
+    if (wizardStep === 1) {
+        if (!wizardSelectedCategory) {
+            showError('Please select a category');
+            return;
+        }
+        wizardStep = 2;
+        updateWizardStep();
+        populateWizardStep2();
+    } else if (wizardStep === 2) {
+        if (!wizardSelectedService) {
+            showError('Please select a service');
+            return;
+        }
+        wizardStep = 3;
+        updateWizardStep();
+        populateWizardStep3();
+    }
+}
+
+/**
+ * Execute installation from wizard
+ */
+async function wizardInstall() {
+    if (!wizardSelectedService) {
+        showError('No service selected');
+        return;
+    }
+
+    const installBtn = document.getElementById('wizardInstallBtn');
+    installBtn.disabled = true;
+    installBtn.textContent = 'Installing...';
+
+    // Save service info before closing modal (which resets wizardSelectedService)
+    const serviceName = wizardSelectedService.name || wizardSelectedService.id;
+    const serviceId = wizardSelectedService.id;
+
+    try {
+        const envVars = {};
+        const inputs = document.querySelectorAll('#configForm .wizard-input');
+        inputs.forEach(input => {
+            if (input.value) {
+                envVars[input.name] = input.value;
+            }
+        });
+
+        await API.installService(serviceId, envVars);
+
+        closeAddServiceModal();
+        showSuccess(`${serviceName} installed successfully!`);
+        await loadServices();
+    } catch (error) {
+        console.error('Installation failed:', error);
+        showError(`Failed to install ${serviceName}: ${error.message}`);
+    } finally {
+        installBtn.disabled = false;
+        installBtn.textContent = 'Install';
+    }
+}
+
+// ============================================
+// Legacy Install Modal (keeping for compatibility)
+// ============================================
+
+/**
+ * Show install modal for a service (legacy - now uses wizard)
+ */
+async function showInstallModal(serviceId) {
+    // Use the wizard instead
+    const available = getAvailableServices();
+    const service = available.find(s => s.id === serviceId);
+
+    if (service) {
+        wizardSelectedCategory = service.category;
+        wizardSelectedService = service;
+        wizardStep = 3;
+
+        showAddServiceModal();
+        updateWizardStep();
+        await populateWizardStep3();
+    }
+}
+
+/**
+ * Close install modal (legacy)
  */
 function closeInstallModal() {
     document.getElementById('installModal').style.display = 'none';
@@ -344,7 +691,7 @@ function closeInstallModal() {
 }
 
 /**
- * Confirm and execute installation
+ * Confirm and execute installation (legacy)
  */
 async function confirmInstall() {
     if (!currentServiceForInstall) return;
@@ -375,6 +722,10 @@ async function confirmInstall() {
         installBtn.textContent = 'Install';
     }
 }
+
+// ============================================
+// Service Actions
+// ============================================
 
 /**
  * Start a service
@@ -464,17 +815,57 @@ function openService(url) {
 }
 
 /**
+ * Get or create the toast container
+ */
+function getToastContainer() {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
+/**
+ * Show a toast notification
+ */
+function showToast(message, type = 'success') {
+    const container = getToastContainer();
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+    toast.innerHTML = `
+        <i class="toast-icon fas ${icon}"></i>
+        <span class="toast-message">${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        toast.classList.add('toast-hiding');
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }, 5000);
+}
+
+/**
  * Show error message
  */
 function showError(message) {
-    alert(`Error: ${message}`);
+    showToast(message, 'error');
 }
 
 /**
  * Show success message
  */
 function showSuccess(message) {
-    alert(message);
+    showToast(message, 'success');
 }
 
 // Close modals when clicking outside
