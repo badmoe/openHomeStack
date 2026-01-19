@@ -11,8 +11,8 @@ services:
     volumes:
       # Data storage (persistent)
       - /home/containers/monitoring/prometheus:/prometheus
-      # Config from repo (includes default prometheus.yml)
-      - ./config:/etc/prometheus:ro
+      # Config (copied to persistent storage on install)
+      - /home/containers/monitoring/prometheus-config:/etc/prometheus:ro
     restart: unless-stopped
     labels:
       # Metadata for openHomeStack dashboard (on first service for discovery)

@@ -100,21 +100,38 @@ async function loadSystemInfo() {
 }
 
 /**
- * Render services in the table
+ * Get installed services (not_installed filtered out)
+ */
+function getInstalledServices() {
+    return allServices.filter(s => s.status?.state && s.status.state !== 'not_installed');
+}
+
+/**
+ * Get available (not installed) services
+ */
+function getAvailableServices() {
+    return allServices.filter(s => !s.status?.state || s.status.state === 'not_installed');
+}
+
+/**
+ * Render services in the table (only installed services)
  */
 function renderServices() {
     const tbody = document.getElementById('servicesBody');
 
-    // Filter services by category
+    // Get only installed services
+    const installedServices = getInstalledServices();
+
+    // Filter by category
     const filteredServices = currentCategory === 'all'
-        ? allServices
-        : allServices.filter(s => s.category === currentCategory);
+        ? installedServices
+        : installedServices.filter(s => s.category === currentCategory);
 
     if (filteredServices.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="5" class="empty-cell">
-                    <i class="fas fa-inbox"></i> No services found in this category
+                    <i class="fas fa-inbox"></i> No services installed${currentCategory !== 'all' ? ' in this category' : ''}
                 </td>
             </tr>
         `;
@@ -171,10 +188,6 @@ function createServiceRow(service) {
  * Get appropriate actions for a service based on its status
  */
 function getServiceActions(service, status) {
-    if (status === 'not_installed') {
-        return `<button class="btn btn-primary" onclick="showInstallModal('${service.id}')">Install</button>`;
-    }
-
     let actions = [];
 
     if (status === 'running') {
@@ -232,9 +245,59 @@ function switchCategory(category) {
 }
 
 /**
+ * Show Add Service modal with available services
+ */
+function showAddServiceModal() {
+    const availableServices = getAvailableServices();
+    const listContainer = document.getElementById('availableServicesList');
+
+    if (availableServices.length === 0) {
+        listContainer.innerHTML = `
+            <div class="no-services-available">
+                <i class="fas fa-check-circle"></i>
+                <p>All available services are already installed!</p>
+            </div>
+        `;
+    } else {
+        // Sort by category then name
+        availableServices.sort((a, b) => {
+            const catCompare = (a.category || '').localeCompare(b.category || '');
+            if (catCompare !== 0) return catCompare;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
+        listContainer.innerHTML = availableServices.map(service => {
+            const icon = serviceIcons[service.icon] || 'fa-box';
+            return `
+                <div class="available-service-item" onclick="showInstallModal('${service.id}')">
+                    <i class="available-service-icon fas ${icon}"></i>
+                    <div class="available-service-info">
+                        <div class="available-service-name">${service.name || service.id}</div>
+                        <div class="available-service-description">${service.description || ''}</div>
+                    </div>
+                    <span class="available-service-category">${service.category || 'other'}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    document.getElementById('addServiceModal').style.display = 'block';
+}
+
+/**
+ * Close Add Service modal
+ */
+function closeAddServiceModal() {
+    document.getElementById('addServiceModal').style.display = 'none';
+}
+
+/**
  * Show install modal for a service
  */
 async function showInstallModal(serviceId) {
+    // Close the add service modal first
+    closeAddServiceModal();
+
     try {
         const response = await API.getService(serviceId);
         const service = response.service;
@@ -418,12 +481,16 @@ function showSuccess(message) {
 window.onclick = function(event) {
     const installModal = document.getElementById('installModal');
     const logsModal = document.getElementById('logsModal');
+    const addServiceModal = document.getElementById('addServiceModal');
 
     if (event.target === installModal) {
         closeInstallModal();
     }
     if (event.target === logsModal) {
         closeLogsModal();
+    }
+    if (event.target === addServiceModal) {
+        closeAddServiceModal();
     }
 }
 

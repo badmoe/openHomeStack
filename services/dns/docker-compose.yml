@@ -19,6 +19,6 @@ services:
       - "openhomestack.service=dns"
       - "openhomestack.name=AdGuard Home"
       - "openhomestack.description=DNS server with optional ad-blocking and web management"
-      - "openhomestack.icon=globe"
-      - "openhomestack.category=networking"
+      - "openhomestack.icon=shield"
+      - "openhomestack.category=dns"
       - "openhomestack.url=http://localhost:3001"

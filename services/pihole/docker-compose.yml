@@ -27,7 +27,7 @@ services:
       - "openhomestack.name=Pi-hole"
       - "openhomestack.description=Network-wide ad blocking and DNS management"
       - "openhomestack.icon=shield"
-      - "openhomestack.category=networking"
+      - "openhomestack.category=dns"
       - "openhomestack.url=http://localhost/admin"
       # Installation prompts for web dashboard
       - "openhomestack.install.prompt.pihole_password=Web Admin Password"
