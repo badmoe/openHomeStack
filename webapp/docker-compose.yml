@@ -1,0 +1,24 @@
+services:
+  frontend:
+    image: nginx:alpine
+    container_name: ohs-frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    image: python:3.10-slim
+    container_name: ohs-backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /app/webapp/backend
+    command: >
+      sh -c "pip install -r requirements.txt && python app.py"
+    restart: unless-stopped
