@@ -235,6 +235,8 @@ function getServiceActions(service, status) {
         actions.push(`<button class="btn btn-secondary" onclick="showLogs('${service.id}')">Logs</button>`);
     }
 
+    // Add Configure button for all installed services
+    actions.push(`<button class="btn btn-secondary" onclick="showConfigModal('${service.id}')">Configure</button>`);
     actions.push(`<button class="btn btn-danger" onclick="removeService('${service.id}')">Remove</button>`);
 
     return actions.join('');
@@ -807,6 +809,219 @@ function closeLogsModal() {
     currentServiceForLogs = null;
 }
 
+// ============================================
+// Configuration Modal
+// ============================================
+
+let currentServiceForConfig = null;
+let currentConfigVolumes = [];
+
+/**
+ * Show configuration modal for a service
+ */
+async function showConfigModal(serviceId) {
+    currentServiceForConfig = serviceId;
+
+    const service = allServices.find(s => s.id === serviceId);
+    document.getElementById('configTitle').textContent = `Configure ${service?.name || serviceId}`;
+
+    document.getElementById('configModal').style.display = 'block';
+    document.getElementById('volumesList').innerHTML = '<p>Loading configuration...</p>';
+
+    try {
+        const response = await API.getServiceConfig(serviceId);
+        currentConfigVolumes = response.config.volumes || [];
+        renderVolumesList();
+    } catch (error) {
+        document.getElementById('volumesList').innerHTML = `<p>Error loading configuration: ${error.message}</p>`;
+    }
+}
+
+/**
+ * Render the volumes list in the config modal
+ */
+function renderVolumesList() {
+    const volumesList = document.getElementById('volumesList');
+
+    if (currentConfigVolumes.length === 0) {
+        volumesList.innerHTML = '<p>No volume mappings configured for this service.</p>';
+        return;
+    }
+
+    volumesList.innerHTML = currentConfigVolumes.map((vol, index) => `
+        <div class="volume-item">
+            <div class="volume-item-header">
+                <i class="fas fa-folder"></i>
+                <span>Container path: ${vol.container_path}</span>
+            </div>
+            <div class="volume-paths">
+                <div class="volume-path-row">
+                    <label>Host path:</label>
+                    <input type="text"
+                           id="volume-host-${index}"
+                           value="${vol.host_path}"
+                           data-index="${index}"
+                           onchange="updateVolumeHost(${index}, this.value)">
+                    <button class="browse-btn" onclick="openBrowseModal(${index})" title="Browse">
+                        <i class="fas fa-folder-open"></i>
+                    </button>
+                </div>
+                <div class="volume-path-row">
+                    <label>Container:</label>
+                    <input type="text" value="${vol.container_path}" disabled>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+/**
+ * Update a volume's host path
+ */
+function updateVolumeHost(index, newPath) {
+    if (currentConfigVolumes[index]) {
+        currentConfigVolumes[index].host_path = newPath;
+    }
+}
+
+/**
+ * Close configuration modal
+ */
+function closeConfigModal() {
+    document.getElementById('configModal').style.display = 'none';
+    currentServiceForConfig = null;
+    currentConfigVolumes = [];
+}
+
+/**
+ * Show restart warning before applying config
+ */
+function showRestartWarning() {
+    document.getElementById('restartWarningModal').style.display = 'block';
+}
+
+/**
+ * Close restart warning modal
+ */
+function closeRestartWarning() {
+    document.getElementById('restartWarningModal').style.display = 'none';
+}
+
+/**
+ * Apply configuration and restart the service
+ */
+async function applyConfigAndRestart() {
+    if (!currentServiceForConfig) return;
+
+    const applyBtn = document.querySelector('#restartWarningModal .btn-warning');
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Applying...';
+
+    try {
+        await API.updateServiceConfig(currentServiceForConfig, currentConfigVolumes, true);
+
+        closeRestartWarning();
+        closeConfigModal();
+        showSuccess('Configuration updated and service restarted');
+        await loadServices();
+    } catch (error) {
+        showError(`Failed to update configuration: ${error.message}`);
+    } finally {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Restart and Apply';
+    }
+}
+
+// ============================================
+// Directory Browser Modal
+// ============================================
+
+let browseVolumeIndex = null;
+let browseCurrentPath = '';
+let browseParentPath = null;
+
+/**
+ * Open the directory browser modal
+ */
+async function openBrowseModal(volumeIndex) {
+    browseVolumeIndex = volumeIndex;
+
+    // Start from the current host path or default
+    const currentPath = currentConfigVolumes[volumeIndex]?.host_path || '/home';
+
+    document.getElementById('browseModal').style.display = 'block';
+    document.getElementById('browseList').innerHTML = '<p class="browse-empty">Loading...</p>';
+
+    await browseTo(currentPath);
+}
+
+/**
+ * Browse to a specific directory
+ */
+async function browseTo(path) {
+    try {
+        const response = await API.browseDirectory(path);
+
+        browseCurrentPath = response.current_path;
+        browseParentPath = response.parent_path;
+
+        document.getElementById('browseCurrentPath').textContent = browseCurrentPath;
+        document.getElementById('browseUpBtn').disabled = !browseParentPath;
+
+        const browseList = document.getElementById('browseList');
+
+        if (response.directories.length === 0) {
+            browseList.innerHTML = '<p class="browse-empty">No subdirectories</p>';
+        } else {
+            browseList.innerHTML = response.directories.map(dir => `
+                <div class="browse-item" onclick="browseTo('${dir.path.replace(/\\/g, '\\\\')}')">
+                    <i class="fas fa-folder"></i>
+                    <span>${dir.name}</span>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        document.getElementById('browseList').innerHTML =
+            `<p class="browse-empty">Error: ${error.message}</p>`;
+    }
+}
+
+/**
+ * Navigate up one directory
+ */
+function browseUp() {
+    if (browseParentPath) {
+        browseTo(browseParentPath);
+    }
+}
+
+/**
+ * Select the current directory and close the browser
+ */
+function selectCurrentDirectory() {
+    if (browseVolumeIndex !== null && browseCurrentPath) {
+        // Update the volume host path
+        currentConfigVolumes[browseVolumeIndex].host_path = browseCurrentPath;
+
+        // Update the input field
+        const input = document.getElementById(`volume-host-${browseVolumeIndex}`);
+        if (input) {
+            input.value = browseCurrentPath;
+        }
+    }
+    closeBrowseModal();
+}
+
+/**
+ * Close the directory browser modal
+ */
+function closeBrowseModal() {
+    document.getElementById('browseModal').style.display = 'none';
+    browseVolumeIndex = null;
+    browseCurrentPath = '';
+    browseParentPath = null;
+}
+
 /**
  * Open a service in new tab
  */
@@ -873,6 +1088,9 @@ window.onclick = function(event) {
     const installModal = document.getElementById('installModal');
     const logsModal = document.getElementById('logsModal');
     const addServiceModal = document.getElementById('addServiceModal');
+    const configModal = document.getElementById('configModal');
+    const restartWarningModal = document.getElementById('restartWarningModal');
+    const browseModal = document.getElementById('browseModal');
 
     if (event.target === installModal) {
         closeInstallModal();
@@ -882,6 +1100,15 @@ window.onclick = function(event) {
     }
     if (event.target === addServiceModal) {
         closeAddServiceModal();
+    }
+    if (event.target === configModal) {
+        closeConfigModal();
+    }
+    if (event.target === restartWarningModal) {
+        closeRestartWarning();
+    }
+    if (event.target === browseModal) {
+        closeBrowseModal();
     }
 }
 

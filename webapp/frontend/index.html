@@ -162,6 +162,75 @@
                 </div>
             </div>
         </div>
+
+        <!-- Configuration Modal -->
+        <div id="configModal" class="modal">
+            <div class="modal-content config-modal">
+                <div class="modal-header">
+                    <h2 id="configTitle">Configure Service</h2>
+                    <span class="close" onclick="closeConfigModal()">&times;</span>
+                </div>
+                <div class="modal-body" id="configBody">
+                    <div class="config-section">
+                        <h3>Volume Mappings</h3>
+                        <p class="config-help">Configure where service data is stored on your host system.</p>
+                        <div id="volumesList" class="volumes-list">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeConfigModal()">Cancel</button>
+                    <button class="btn btn-primary" id="applyConfigBtn" onclick="showRestartWarning()">Apply</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Restart Warning Modal -->
+        <div id="restartWarningModal" class="modal">
+            <div class="modal-content restart-warning-modal">
+                <div class="modal-header">
+                    <h2><i class="fas fa-exclamation-triangle"></i> Restart Required</h2>
+                    <span class="close" onclick="closeRestartWarning()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p>Applying these changes will restart the service container.</p>
+                    <p>The service will be temporarily unavailable during the restart.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeRestartWarning()">Cancel</button>
+                    <button class="btn btn-warning" onclick="applyConfigAndRestart()">Restart and Apply</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Directory Browser Modal -->
+        <div id="browseModal" class="modal">
+            <div class="modal-content browse-modal">
+                <div class="modal-header">
+                    <h2><i class="fas fa-folder-open"></i> Select Directory</h2>
+                    <span class="close" onclick="closeBrowseModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="browse-current-path">
+                        <label>Current path:</label>
+                        <span id="browseCurrentPath">/home</span>
+                    </div>
+                    <div class="browse-nav">
+                        <button class="btn btn-secondary btn-sm" id="browseUpBtn" onclick="browseUp()">
+                            <i class="fas fa-arrow-up"></i> Up
+                        </button>
+                    </div>
+                    <div class="browse-list" id="browseList">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeBrowseModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="selectCurrentDirectory()">Select This Directory</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="js/api.js"></script>

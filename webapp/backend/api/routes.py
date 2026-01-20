@@ -181,6 +181,140 @@ def remove_service(service_id):
         }), 500
 
 
+# ==================== Configuration ====================
+
+@api_bp.route('/services/<service_id>/config', methods=['GET'])
+def get_service_config(service_id):
+    """Get current configuration for a service (volumes, environment)"""
+    try:
+        config = service_manager.get_service_config(service_id)
+        if not config:
+            return jsonify({
+                "success": False,
+                "error": f"Service '{service_id}' not found"
+            }), 404
+
+        return jsonify({
+            "success": True,
+            "config": config
+        })
+    except Exception as e:
+        logger.error(f"Error getting config for {service_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@api_bp.route('/services/<service_id>/config', methods=['PUT'])
+def update_service_config(service_id):
+    """
+    Update service configuration and optionally restart
+    Expects JSON body with volumes array and restart flag
+    """
+    try:
+        data = request.get_json() or {}
+        new_volumes = data.get('volumes', [])
+        should_restart = data.get('restart', True)
+
+        # Update the configuration
+        result = service_manager.update_service_config(service_id, new_volumes)
+
+        if not result['success']:
+            return jsonify(result), 400
+
+        # Restart the container if requested
+        if should_restart:
+            restart_result = container_manager.restart(service_id)
+            if not restart_result['success']:
+                return jsonify({
+                    "success": True,
+                    "message": "Configuration updated but restart failed",
+                    "restart_error": restart_result.get('error')
+                })
+
+            return jsonify({
+                "success": True,
+                "message": "Configuration updated and service restarted"
+            })
+
+        return jsonify({
+            "success": True,
+            "message": "Configuration updated (restart not requested)"
+        })
+
+    except Exception as e:
+        logger.error(f"Error updating config for {service_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# ==================== File Browser ====================
+
+@api_bp.route('/browse', methods=['GET'])
+def browse_directory():
+    """
+    Browse directories on the server
+    Query param: path (default: /home or C:\\ on Windows)
+    Returns list of subdirectories at the given path
+    """
+    import platform
+    from pathlib import Path
+
+    try:
+        # Get the path to browse, default to home directory
+        if platform.system() == 'Windows':
+            default_path = 'C:\\'
+        else:
+            default_path = '/home'
+
+        browse_path = request.args.get('path', default_path)
+        path = Path(browse_path)
+
+        if not path.exists():
+            return jsonify({
+                "success": False,
+                "error": f"Path does not exist: {browse_path}"
+            }), 404
+
+        if not path.is_dir():
+            return jsonify({
+                "success": False,
+                "error": f"Path is not a directory: {browse_path}"
+            }), 400
+
+        # Get parent directory (for navigation)
+        parent = str(path.parent) if path.parent != path else None
+
+        # List subdirectories only (not files)
+        directories = []
+        try:
+            for item in sorted(path.iterdir()):
+                if item.is_dir() and not item.name.startswith('.'):
+                    directories.append({
+                        "name": item.name,
+                        "path": str(item)
+                    })
+        except PermissionError:
+            pass  # Skip directories we can't read
+
+        return jsonify({
+            "success": True,
+            "current_path": str(path),
+            "parent_path": parent,
+            "directories": directories
+        })
+
+    except Exception as e:
+        logger.error(f"Error browsing directory: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # ==================== Monitoring ====================
 
 @api_bp.route('/services/<service_id>/status', methods=['GET'])

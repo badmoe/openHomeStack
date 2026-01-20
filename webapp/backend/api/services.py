@@ -240,3 +240,130 @@ class ServiceManager:
             Path: Path to service directory
         """
         return self.services_dir / service_id
+
+    def get_service_config(self, service_id):
+        """
+        Get the current configuration for a service (volumes, environment)
+
+        Args:
+            service_id: Service identifier
+
+        Returns:
+            dict: Configuration with volumes and environment variables
+        """
+        compose_file = self.get_compose_file_path(service_id)
+        if not compose_file:
+            return None
+
+        try:
+            with open(compose_file, 'r') as f:
+                compose_data = yaml.safe_load(f)
+
+            services = compose_data.get('services', {})
+            if not services:
+                return None
+
+            # Get the first/main service
+            main_service = list(services.values())[0]
+            main_service_name = list(services.keys())[0]
+
+            # Parse volumes
+            volumes = []
+            raw_volumes = main_service.get('volumes', [])
+            for vol in raw_volumes:
+                if isinstance(vol, str) and ':' in vol:
+                    parts = vol.split(':')
+                    host_path = parts[0]
+                    container_path = parts[1]
+                    mode = parts[2] if len(parts) > 2 else 'rw'
+                    volumes.append({
+                        'host_path': host_path,
+                        'container_path': container_path,
+                        'mode': mode,
+                        'original': vol
+                    })
+
+            # Parse environment variables
+            environment = []
+            raw_env = main_service.get('environment', [])
+            if isinstance(raw_env, list):
+                for env in raw_env:
+                    if '=' in env:
+                        key, value = env.split('=', 1)
+                        environment.append({'key': key, 'value': value})
+                    else:
+                        environment.append({'key': env, 'value': ''})
+            elif isinstance(raw_env, dict):
+                for key, value in raw_env.items():
+                    environment.append({'key': key, 'value': str(value) if value else ''})
+
+            # Parse ports
+            ports = []
+            raw_ports = main_service.get('ports', [])
+            for port in raw_ports:
+                if isinstance(port, str):
+                    ports.append(port)
+
+            return {
+                'service_id': service_id,
+                'service_name': main_service_name,
+                'volumes': volumes,
+                'environment': environment,
+                'ports': ports
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting config for {service_id}: {e}")
+            return None
+
+    def update_service_config(self, service_id, new_volumes):
+        """
+        Update the volume configuration for a service
+
+        Args:
+            service_id: Service identifier
+            new_volumes: List of volume dicts with host_path and container_path
+
+        Returns:
+            dict: Result with success status
+        """
+        compose_file = self.get_compose_file_path(service_id)
+        if not compose_file:
+            return {'success': False, 'error': 'Service not found'}
+
+        try:
+            with open(compose_file, 'r') as f:
+                compose_data = yaml.safe_load(f)
+
+            services = compose_data.get('services', {})
+            if not services:
+                return {'success': False, 'error': 'No services in compose file'}
+
+            # Get the first/main service
+            main_service_name = list(services.keys())[0]
+
+            # Build new volumes list
+            updated_volumes = []
+            for vol in new_volumes:
+                host = vol.get('host_path', '')
+                container = vol.get('container_path', '')
+                mode = vol.get('mode', 'rw')
+                if host and container:
+                    if mode and mode != 'rw':
+                        updated_volumes.append(f"{host}:{container}:{mode}")
+                    else:
+                        updated_volumes.append(f"{host}:{container}")
+
+            # Update the compose data
+            compose_data['services'][main_service_name]['volumes'] = updated_volumes
+
+            # Write back to file
+            with open(compose_file, 'w') as f:
+                yaml.dump(compose_data, f, default_flow_style=False, sort_keys=False)
+
+            logger.info(f"Updated volumes for {service_id}")
+            return {'success': True, 'message': 'Configuration updated'}
+
+        except Exception as e:
+            logger.error(f"Error updating config for {service_id}: {e}")
+            return {'success': False, 'error': str(e)}

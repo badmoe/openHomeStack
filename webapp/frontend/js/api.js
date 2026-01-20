@@ -112,4 +112,29 @@ class API {
     static async getSystemInfo() {
         return await this.request('/system');
     }
+
+    /**
+     * Get service configuration (volumes, environment)
+     */
+    static async getServiceConfig(serviceId) {
+        return await this.request(`/services/${serviceId}/config`);
+    }
+
+    /**
+     * Update service configuration
+     */
+    static async updateServiceConfig(serviceId, volumes, restart = true) {
+        return await this.request(`/services/${serviceId}/config`, {
+            method: 'PUT',
+            body: JSON.stringify({ volumes, restart })
+        });
+    }
+
+    /**
+     * Browse server directories
+     */
+    static async browseDirectory(path = '') {
+        const params = path ? `?path=${encodeURIComponent(path)}` : '';
+        return await this.request(`/browse${params}`);
+    }
 }

@@ -757,6 +757,213 @@ header {
     word-wrap: break-word;
 }
 
+/* Configuration Modal */
+.config-modal {
+    max-width: 600px;
+}
+
+.config-section {
+    margin-bottom: 20px;
+}
+
+.config-section h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.config-help {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+
+.volumes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.volume-item {
+    background: var(--dark-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.volume-item-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.volume-item-header i {
+    color: var(--primary-color);
+}
+
+.volume-paths {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.volume-path-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.volume-path-row label {
+    width: 80px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.volume-path-row input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.volume-path-row input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.volume-path-row input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Restart Warning Modal */
+.restart-warning-modal {
+    max-width: 450px;
+}
+
+.restart-warning-modal .modal-header {
+    border-bottom-color: var(--warning-color);
+}
+
+.restart-warning-modal .modal-header h2 {
+    color: var(--warning-color);
+}
+
+.restart-warning-modal .modal-header h2 i {
+    margin-right: 8px;
+}
+
+.restart-warning-modal .modal-body p {
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+}
+
+.restart-warning-modal .modal-body p:last-child {
+    margin-bottom: 0;
+}
+
+/* Directory Browser Modal */
+.browse-modal {
+    max-width: 550px;
+}
+
+.browse-current-path {
+    background: var(--dark-bg);
+    padding: 10px 12px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+}
+
+.browse-current-path label {
+    color: var(--text-secondary);
+    margin-right: 8px;
+}
+
+.browse-current-path span {
+    color: var(--primary-color);
+}
+
+.browse-nav {
+    margin-bottom: 12px;
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+}
+
+.browse-list {
+    background: var(--dark-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.browse-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s;
+}
+
+.browse-item:last-child {
+    border-bottom: none;
+}
+
+.browse-item:hover {
+    background: var(--card-bg);
+}
+
+.browse-item i {
+    color: var(--primary-color);
+    font-size: 1rem;
+}
+
+.browse-item span {
+    font-size: 0.9rem;
+}
+
+.browse-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.browse-btn {
+    padding: 8px 10px;
+    background: var(--border-color);
+    border: none;
+    border-radius: 4px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.browse-btn:hover {
+    background: var(--primary-color);
+}
+
+.browse-btn i {
+    font-size: 0.85rem;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .col-description {
