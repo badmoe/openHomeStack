@@ -1,3 +1,0 @@
-# Roles
-
-Reusable Ansible roles.
