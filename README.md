@@ -51,11 +51,14 @@ No cloud dependencies, no vendor lock-in—just open-source tools running on you
    cd openHomeStack
    ```
 
-2. Start the dashboard:
+2. Start the dashboard (frontend + backend):
    ```bash
    cd webapp
    docker-compose up -d
    ```
+   This starts two containers:
+   - `ohs-frontend` (nginx) on port 8080 - serves the web UI
+   - `ohs-backend` (Flask) on port 5000 - provides the API
 
 3. Open your browser to `http://localhost:8080`
 
