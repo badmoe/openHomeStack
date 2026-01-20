@@ -51,15 +51,22 @@ No cloud dependencies, no vendor lock-in—just open-source tools running on you
    cd openHomeStack
    ```
 
-2. Start the dashboard:
+2. Start the backend API:
    ```bash
-   cd webapp
-   docker-compose up -d
+   cd webapp/backend
+   pip install -r requirements.txt
+   python app.py
    ```
 
-3. Open your browser to `http://localhost:5000`
+3. Open the dashboard by opening `webapp/frontend/index.html` in your browser, or serve it with any web server:
+   ```bash
+   cd webapp/frontend
+   python -m http.server 8080
+   ```
 
-4. Use the web dashboard to install services
+4. Open your browser to `http://localhost:8080`
+
+5. Use the web dashboard to install services
 
 ### Data Storage
 
@@ -69,15 +76,15 @@ Services store their data in `/home/containers/{service-name}/` on Linux. This k
 
 ```
 ┌─────────────────────────────────────────┐
-│           Web Dashboard (nginx)         │
-│              localhost:80               │
+│        Web Dashboard (static files)     │
+│           index.html / JS / CSS         │
 └─────────────────┬───────────────────────┘
-                  │
+                  │ HTTP requests to /api
 ┌─────────────────▼───────────────────────┐
 │          Backend API (Flask)            │
 │            localhost:5000               │
 └─────────────────┬───────────────────────┘
-                  │
+                  │ docker-compose commands
 ┌─────────────────▼───────────────────────┐
 │          Docker Engine                  │
 │    ┌─────────┐ ┌─────────┐ ┌─────────┐  │
@@ -86,7 +93,7 @@ Services store their data in `/home/containers/{service-name}/` on Linux. This k
 └─────────────────────────────────────────┘
 ```
 
-The dashboard communicates with the Docker daemon to manage service containers. Each service has its own Docker Compose definition with openHomeStack labels for metadata.
+The frontend is a static web app that makes API calls to the Flask backend. The backend uses Docker and docker-compose to manage service containers. Each service has its own Docker Compose definition with openHomeStack labels for metadata.
 
 ## Project Structure
 
